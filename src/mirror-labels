@@ -10,12 +10,12 @@ import yaml
 QUERY = '''
 query($owner:String!, $reposCursor:String, $labelsCursor:String) {
     organization(login:$owner) {
-        repositories(first:100, after:$reposCursor, isArchived:false) {
+        repositories(first:10, after:$reposCursor, isArchived:false) {
             pageInfo { endCursor hasNextPage }
             nodes {
                 name
                 id
-                labels(first:100, after:$labelsCursor) {
+                labels(first:10, after:$labelsCursor) {
                     pageInfo { endCursor hasNextPage }
                     nodes {
                         name
@@ -29,15 +29,6 @@ query($owner:String!, $reposCursor:String, $labelsCursor:String) {
     }
 }
 '''
-
-cursors = {
-    "reposCursor": {
-        'path': ["organization", "repositories"],
-        'next': {
-            "labelsCursor": ["labels"]
-        }
-    }
-}
 
 UPDATE_LABEL = '''
 mutation($input: UpdateLabelInput!) {
@@ -85,12 +76,34 @@ with open(sys.argv[1]) as f:
 LABEL_GROUPS = input["LABEL_GROUPS"]
 REPOS = input["REPOS"]
 
-# Fetch repository data.
-try:
-    result = githubgql.graphql(QUERY, token=token, cursors=cursors, owner=owner)
-except githubgql.TokenError as e:
-    print(e.error)
-    sys.exit(0)
+# Initialize empty lists for repositories and labels
+repositories = []
+labels = []
+
+# Set initial values for reposCursor and labelsCursor
+reposCursor = None
+labelsCursor = None
+
+while True:
+    try:
+        # Make a GraphQL request with the current cursors
+        result = githubgql.graphql(QUERY, token=token, cursors={'reposCursor': reposCursor, 'labelsCursor': labelsCursor}, owner=owner)
+    except githubgql.TokenError as e:
+        print(e.error)
+        sys.exit(0)
+
+    # Append the fetched repositories and labels to the respective lists
+    repositories.extend(result["organization"]["repositories"]["nodes"])
+    for repo in repositories:
+        labels.extend(repo["labels"]["nodes"])
+
+    # Update the cursors with the endCursor from the pageInfo of the fetched data
+    reposCursor = result["organization"]["repositories"]["pageInfo"]["endCursor"]
+    labelsCursor = repositories[-1]["labels"]["pageInfo"]["endCursor"]
+
+    # If hasNextPage is False, break the loop
+    if not result["organization"]["repositories"]["pageInfo"]["hasNextPage"]:
+        break
 
 print()
 print(" --- STARTING LABEL SYNC --- ")
@@ -126,18 +139,18 @@ for repo in result["organization"]["repositories"]["nodes"]:
     if len(to_be_renamed) > 0:
         for name in to_be_renamed:
             print(f"{owner}/{repo['name']}: renaming label {name} to {all_old_names[name]}")
-            try:
-                githubgql.graphql(UPDATE_LABEL, token=token, accept="application/vnd.github.bane-preview+json", input={
-                        "id": existing_labels[name]["id"],
-                        "name": all_old_names[name]
-                    }
-                )
-            except githubgql.GraphQLError as e:
-                if(e.errors[0]['type'] == "FORBIDDEN"):
-                    print(f"Cannot edit labels on {repo['name']}. Please ensure bot has permission to create and edit labels.")
-                    continue
-                else:
-                    raise
+            #try:
+            #    githubgql.graphql(UPDATE_LABEL, token=token, accept="application/vnd.github.bane-preview+json", input={
+            #            "id": existing_labels[name]["id"],
+            #            "name": all_old_names[name]
+            #        }
+            #    )
+            #except githubgql.GraphQLError as e:
+            #    if(e.errors[0]['type'] == "FORBIDDEN"):
+            #        print(f"Cannot edit labels on {repo['name']}. Please ensure bot has permission to create and edit labels.")
+            #        continue
+            #    else:
+            #        raise
 
         # To prevent actions being taken on stale fetch data, defer
         # further processing after renames happen (if they happen).
@@ -171,52 +184,52 @@ for repo in result["organization"]["repositories"]["nodes"]:
     print()
 
     # Add new labels, and delete unused ones.
-    for name in labels_to_add:
-        label_to_create = current_labels[name]
-        try:
-            githubgql.graphql(CREATE_LABEL, token=token, accept="application/vnd.github.bane-preview+json", input={
-                    "repositoryId": repo["id"],
-                    "name": name,
-                    "color": label_to_create['color'],
-                    "description": label_to_create['description']
-                }
-            )
-        except githubgql.GraphQLError as e:
-            if(e.errors[0]['type'] == "FORBIDDEN"):
-                print(f"Cannot edit labels on {repo['name']}. Please ensure bot has permission to create and edit labels.")
-                continue
-            else:
-                raise
-    for name in labels_to_delete:
-        id_to_delete = existing_labels[name]["id"]
-        try:
-            githubgql.graphql(DELETE_LABEL, token=token, accept="application/vnd.github.bane-preview+json", input={
-                    "id": id_to_delete
-                }
-            )
-        except githubgql.GraphQLError as e:
-            if(e.errors[0]['type'] == "FORBIDDEN"):
-                print(f"Cannot edit labels on {repo['name']}. Please ensure bot has permission to create and edit labels.")
-                continue
-            else:
-                raise
-
-    # If a label needs to be edited, perform the edit.
-    for name in labels_to_edit:
-        try:
-            githubgql.graphql(UPDATE_LABEL, token=token, accept="application/vnd.github.bane-preview+json", input={
-                    "id": existing_labels[name]["id"],
-                    "name": name,
-                    "color": current_labels[name]["color"],
-                    "description": current_labels[name]['description']
-                }
-            )
-        except githubgql.GraphQLError as e:
-            if(e.errors[0]['type'] == "FORBIDDEN"):
-                print(f"Cannot edit labels on {repo['name']}. Please ensure bot has permission to create and edit labels.")
-                continue
-            else:
-                raise
+    #for name in labels_to_add:
+    #    label_to_create = current_labels[name]
+    #    try:
+    #        githubgql.graphql(CREATE_LABEL, token=token, accept="application/vnd.github.bane-preview+json", input={
+    #                "repositoryId": repo["id"],
+    #                "name": name,
+    #                "color": label_to_create['color'],
+    #                "description": label_to_create['description']
+    #            }
+    #        )
+    #    except githubgql.GraphQLError as e:
+    #        if(e.errors[0]['type'] == "FORBIDDEN"):
+    #            print(f"Cannot edit labels on {repo['name']}. Please ensure bot has permission to create and edit labels.")
+    #            continue
+    #        else:
+    #            raise
+    #for name in labels_to_delete:
+    #    id_to_delete = existing_labels[name]["id"]
+    #    try:
+    #        githubgql.graphql(DELETE_LABEL, token=token, accept="application/vnd.github.bane-preview+json", input={
+    #                "id": id_to_delete
+    #            }
+    #        )
+    #    except githubgql.GraphQLError as e:
+    #        if(e.errors[0]['type'] == "FORBIDDEN"):
+    #            print(f"Cannot edit labels on {repo['name']}. Please ensure bot has permission to create and edit labels.")
+    #            continue
+    #        else:
+    #            raise
+#
+    ## If a label needs to be edited, perform the edit.
+    #for name in labels_to_edit:
+    #    try:
+    #        githubgql.graphql(UPDATE_LABEL, token=token, accept="application/vnd.github.bane-preview+json", input={
+    #                "id": existing_labels[name]["id"],
+    #                "name": name,
+    #                "color": current_labels[name]["color"],
+    #                "description": current_labels[name]['description']
+    #            }
+    #        )
+    #    except githubgql.GraphQLError as e:
+    #        if(e.errors[0]['type'] == "FORBIDDEN"):
+    #            print(f"Cannot edit labels on {repo['name']}. Please ensure bot has permission to create and edit labels.")
+    #            continue
+    #        else:
+    #            raise
 
 print()
 print(" --- LABEL SYNC COMPLETE --- ")
