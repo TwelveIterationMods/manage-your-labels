@@ -85,9 +85,14 @@ reposCursor = None
 labelsCursor = None
 
 while True:
+    cursors = {}
+    if reposCursor is not None:
+        cursors['reposCursor'] = reposCursor
+    if labelsCursor is not None:
+        cursors['labelsCursor'] = labelsCursor
     try:
         # Make a GraphQL request with the current cursors
-        result = githubgql.graphql(QUERY, token=token, cursors={'reposCursor': reposCursor, 'labelsCursor': labelsCursor}, owner=owner)
+        result = githubgql.graphql(QUERY, token=token, cursors=cursors, owner=owner)
     except githubgql.TokenError as e:
         print(e.error)
         sys.exit(0)
