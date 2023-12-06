@@ -30,6 +30,15 @@ query($owner:String!, $reposCursor:String, $labelsCursor:String) {
 }
 '''
 
+cursors = {
+    "reposCursor": {
+        'path': ["organization", "repositories"],
+        'next': {
+            "labelsCursor": ["labels"]
+        }
+    }
+}
+
 UPDATE_LABEL = '''
 mutation($input: UpdateLabelInput!) {
     updateLabel(input: $input) {
@@ -76,39 +85,12 @@ with open(sys.argv[1]) as f:
 LABEL_GROUPS = input["LABEL_GROUPS"]
 REPOS = input["REPOS"]
 
-# Initialize empty lists for repositories and labels
-repositories = []
-labels = []
-
-# Set initial values for reposCursor and labelsCursor
-reposCursor = None
-labelsCursor = None
-
-while True:
-    cursors = {}
-    if reposCursor is not None:
-        cursors['reposCursor'] = reposCursor
-    if labelsCursor is not None:
-        cursors['labelsCursor'] = labelsCursor
-    try:
-        # Make a GraphQL request with the current cursors
-        result = githubgql.graphql(QUERY, token=token, cursors=cursors, owner=owner)
-    except githubgql.TokenError as e:
-        print(e.error)
-        sys.exit(0)
-
-    # Append the fetched repositories and labels to the respective lists
-    repositories.extend(result["organization"]["repositories"]["nodes"])
-    for repo in repositories:
-        labels.extend(repo["labels"]["nodes"])
-
-    # Update the cursors with the endCursor from the pageInfo of the fetched data
-    reposCursor = result["organization"]["repositories"]["pageInfo"]["endCursor"]
-    labelsCursor = repositories[-1]["labels"]["pageInfo"]["endCursor"]
-
-    # If hasNextPage is False, break the loop
-    if not result["organization"]["repositories"]["pageInfo"]["hasNextPage"]:
-        break
+# Fetch repository data.
+try:
+    result = githubgql.graphql(QUERY, token=token, cursors=cursors, owner=owner)
+except githubgql.TokenError as e:
+    print(e.error)
+    sys.exit(0)
 
 print()
 print(" --- STARTING LABEL SYNC --- ")
