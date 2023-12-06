@@ -15,7 +15,7 @@ query($owner:String!, $reposCursor:String, $labelsCursor:String) {
             nodes {
                 name
                 id
-                labels(first:25, after:$labelsCursor) {
+                labels(first:50, after:$labelsCursor) {
                     pageInfo { endCursor hasNextPage }
                     nodes {
                         name
