@@ -15,7 +15,7 @@ query($owner:String!, $reposCursor:String, $labelsCursor:String) {
             nodes {
                 name
                 id
-                labels(first:10, after:$labelsCursor) {
+                labels(first:25, after:$labelsCursor) {
                     pageInfo { endCursor hasNextPage }
                     nodes {
                         name
@@ -167,7 +167,7 @@ for repo in result["organization"]["repositories"]["nodes"]:
             state = "-"
         if label in labels_to_edit:
             state = "*"
-        print(f" {state}{label}", end="")
+        print(f" {state}{label},", end="")
     print()
 
     # Add new labels, and delete unused ones.
